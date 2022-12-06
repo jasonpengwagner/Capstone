@@ -90,15 +90,17 @@ colnames(bond) <- tolower(colnames(bond))
 bond_keep <- c("idncase", "bond_hear_req_date","initial_bond","new_bond")
 
 bond <- subset(bond, select = bond_keep)
-#here's one of our questions: bond hearings only happen when immigrants ask the court to adjust the bond, which may involve judges' decision. 
-#would this restrict us from using judge fixed effects? 
-#every bond record involves a bond hearing, as the bond_hear_req_date field tells us
+
+#  Mail Question 3: bond hearings only happen when immigrants ask the court to adjust the bond, which may involve judges' decision. 
+#  Would this restrict us from using judge fixed effects? 
+#  Every bond record involves a bond hearing, as the bond_hear_req_date field tells us
+#  How could we exclude those who appeal the bond?
 sum(is.na(bond$bond_hear_req_date))
 
 bond$bond_hear_req_date <- substr(bond$bond_hear_req_date, 1, 10)
 bond$bond_hear_req_date  <- as.Date(bond$bond_hear_req_date, format = "%Y-%m-%d")
 
-#bond <- bond[!is.na(bond$bond_hear_req_date),]
+#bond <- bond[!is.na(bond$bond_hear_req_date),] #no need because there is no NAs in this field
 
 bond$initial_bond <- as.numeric(bond$initial_bond)
 bond$new_bond <- as.numeric(bond$new_bond)
@@ -117,7 +119,7 @@ bond$bond_amount[bond$initial_bond==0 & bond$new_bond==0] <- bond$initial_bond[b
 bond_case <- summaryBy( cbind(bond_amount,initial_bond) ~ idncase, FUN = c(sum, mean), data = bond)
 bond_case <- bond_case[2:nrow(bond_case),] #drop a blank obs
 
-bond_case$req_bond <- 1
+bond_case$req_bond <- 1  #flag for those requested for bond
 
 
 countries <- NULL
@@ -154,13 +156,6 @@ case_proc$hearing_date <- as.Date(case_proc$hearing_date  ,format = "%Y-%m-%d")
 case_proc$comp_date <- substr(case_proc$comp_date  , 1,10)
 case_proc$comp_date <- as.Date(case_proc$comp_date  ,format = "%Y-%m-%d")
 
-#newest record of custody
-#colnames(det)[2] <- "hist_custody"
-#det$hist_custody <- as.factor(det$hist_custody)
-#det$hist_custody <- factor(det$hist_custody, levels=c("R","D","N"))
-#det <- with(det, det[order(idncase, hist_custody),])
-#latest_det <- aggregate(det,by=list(det$hist_custody),head,n=1) how to refresh?
-
 cases_nat <- NULL #to save disk space
 proc <- NULL
 
@@ -179,16 +174,18 @@ case_proc <- NULL
 
 bond_case <- NULL
 
-#saved as "transfer.Rdata", Up to sample row 130 calculate detention time part
 
 table(main$case_type)
-#select only the removal case, deleted column "case_type"
+#select only the removal case (99.9% of all data), deleted column "case_type"
 main <- main[main$case_type =="RMV",]
 main <- subset(main, select=-case_type)
 
 
-#change every Dec_code not equal to removal to "not removal"?
+#Mail Question 2: change every Dec_code not equal to removal to "not removal"?
+table(main$dec_code) # *** what does all these decision code mean? Doesn't match with the code book, and many missing values...
 main$remove <- ifelse(main$dec_code == "X", 1,0)
+
+
 #change to binary variables
 main$crim <- ifelse(as.numeric(main$crim_ind)==1,0,1)
 main$crim_ind <- main$crim
@@ -219,7 +216,7 @@ main <- main %>% filter(hearing_date < '2022-11-01')
 
 
 #in main, one individual corresponding to more proceedings
-#Delete duplicates in idncase
+#Delete duplicates in idncase, keep the latest proceeding only
 before_unique_main <- main
 main <- main[!duplicated(main$idncase), ]
 
@@ -240,7 +237,7 @@ main$req_bond[is.na(main$req_bond)] <- 0
 rep_merge <- NULL
 rep2 <- NULL
 
-table(main$dec_code) # *** what does all these decision code mean? Doesn't match with the code book, and many missing values...
+
 
 
 #do we need to add dummies just for regression? Or we can use factor?
@@ -254,10 +251,6 @@ library(data.table)
 fwrite(main, "regression.csv", row.names=FALSE, col.names=TRUE)
 
 
-#more about bonds: how could we exclude those who appeal the bond?
-#bond <- read.csv('FOIA TRAC Report 20221003/D_TblAssociatedBond.csv',sep = "\t", header = T, skipNul = T)
-#bond <- bond[!duplicated(bond$IDNASSOCBOND),]
-#colnames(bond) <- tolower(colnames(bond))
 
 
 
