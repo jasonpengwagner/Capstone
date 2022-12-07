@@ -1,0 +1,43 @@
+Identifiers: 
+idncase: The unique key for each alien, unique key in this dataset
+idnproceeding: key for each proceeding that one alien attend
+osc_date: The date the Department of Homeland Security issued the charging document to the alien
+hearing_date: The initial/first hearing date on a proceeding (Initial Master or Custody hearing)
+comp_date: The date on which the immigration judge rendered a decision on the proceeding
+nat: nationality of alien
+alien_city: alien address city
+alien_state: alien address state
+update_site: The code that represents the immigration court having jurisdiction over the assigned hearing location
+lang: The language that alien speaks primarily
+
+Variables: 
+(dependent)
+new_dec_code: The code that represents the decision of the immigration judge for a case depending on the case type. If this equals "X", the alien is deemed deported.
+(remove: dummy of new_dec_code: 1 for new_dec_code = "X", 0 for all other decisions)
+
+(independent)
+custody: Indicator that signs if an immigrant has been detained or is being detained 
+
+(controls)
+crim_ind: Indicates whether a charge is a criminal charge (that is, an immigrant can be detained because of "violation of immigrant law" or "committing crime")
+aggravate_felon: Describes if the charge added is classified as that of an aggravated felony
+ij_code: The code of immigration judge
+gender: gender of alien
+lpr: Indicates whether or not the alien is a lawful permanent resident of the United States
+bond_amount.mean: The average bond amount that the alien is granted/requested by the court to pay for bail
+immi_type: category of immigrants by nationality (African/Latin-American/Asian/Caribbean)
+num_proc: number of proceedings recorded for this immigrant
+req_bond: Indicates whether an alien has requested a bond to the immigrant court
+
+Other data columns: 
+date_detained: Date the alien was detained
+date_released: Actual release date of the detained alien
+country_id: id of country in database
+country_name: name of country in database
+osc_year: the year component of osc_date
+bond_amount.sum: The total bond amount that the alien is granted/requested by the court to pay for bail
+initial_bond.sum: The total bond amount that an alien requested in initial bond hearing (subject to change by court decision)
+initial_bond.mean: The average bond amount that an alien requested in initial bond hearing (subject to change by court decision)
+
+
+
