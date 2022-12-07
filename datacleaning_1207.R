@@ -6,6 +6,7 @@ library(dplyr)
 #set working directory on own computer
 #setwd("~/Desktop/Capstone/2022 Fall/Data")
 
+
 cases <- read.csv('FOIA TRAC Report 20221003/A_TblCase.csv', sep = "\t", header = T, skipNul = T)
 
 cases <- cases[!duplicated(cases$IDNCASE),] # remove rows with duplicate case ID number
@@ -181,14 +182,6 @@ main <- main[main$case_type =="RMV",]
 main <- subset(main, select=-case_type)
 
 
-#Mail Question 2: change every Dec_code not equal to removal to "not removal"?
-table(main$dec_code) # *** what does all these decision code mean? Doesn't match with the code book, and many missing values...
-main$remove <- ifelse(main$dec_code == "X", 1,0)
-
-
-#change to binary variables
-main$crim <- ifelse(as.numeric(main$crim_ind)==1,0,1)
-main$crim_ind <- main$crim
 
 #add reps data
 rep <- read.csv('FOIA TRAC Report 20221003/tbl_RepsAssigned.csv', sep = "\t", header = T, skipNul = T)
@@ -261,7 +254,7 @@ main <- cbind(uniq_main,numproc)
 table(main$new_dec_code) #1.1M with empty decision codes
 main <- main[, !(colnames(main) %in% c("dec_code", "other_comp"))]
 
-#save disk space
+
 dup_decision_id_data <- NULL
 dup_latest_dec <- NULL
 dupMain <- NULL
@@ -281,14 +274,22 @@ main$bond_amount.mean[is.na(main$bond_amount.mean)] <- 0
 main$initial_bond.sum[is.na(main$initial_bond.sum)] <- 0
 main$initial_bond.mean[is.na(main$initial_bond.mean)] <- 0
 
+#convert to binary variables
 main$det <- ifelse(main$custody == "D", 1,0)
 main$represent[is.na(main$represent)] <- 0
 main$req_bond[is.na(main$req_bond)] <- 0
 
+#Mail Question 2: change every Dec_code not equal to removal to "not removal"?
+table(main$new_dec_code) # *** what does all these decision code mean? Doesn't match with the code book, and many missing values...
+main$remove <- ifelse(main$new_dec_code == "X", 1,0)
+
+main$crim_ind <- ifelse(as.numeric(main$crim_ind)==1,0,1)
+
+
 #save disk space
 rep_merge <- NULL
 rep2 <- NULL
-
+rep <- NULL
 
 #do we need to add dummies just for regression? Or we can use factor?
 #main$i_africa <- ifelse(main$immi_type == "African", 1,0)
@@ -298,4 +299,4 @@ rep2 <- NULL
 
 #export
 library(data.table)
-fwrite(main, "regression_1206.csv", row.names=FALSE, col.names=TRUE)
+fwrite(main, "regression_1207.csv", row.names=FALSE, col.names=TRUE)
