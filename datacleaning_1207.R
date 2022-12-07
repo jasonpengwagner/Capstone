@@ -3,7 +3,7 @@ library(doBy)
 library(tidyverse)
 library(dplyr)
 
-#On Mu's Computer
+#set working directory on own computer
 #setwd("~/Desktop/Capstone/2022 Fall/Data")
 
 cases <- read.csv('FOIA TRAC Report 20221003/A_TblCase.csv', sep = "\t", header = T, skipNul = T)
@@ -48,7 +48,7 @@ cases_nat <- merge(cases, nat, by.x = "nat", by.y = "strCode", all.x = T)
 cases_nat <- cases_nat[!is.na(cases_nat$strDescription),]
 cases_nat <- cases_nat[cases_nat$nat!="??",]
 cases_nat <- cases_nat[!is.na(cases_nat$nat),]
-colnames(cases_nat)[11]<-"country_name"
+colnames(cases_nat)[15]<-"country_name"
 
 cases_nat$case_type <- as.factor(cases_nat$case_type)
 
@@ -60,7 +60,7 @@ cases_nat$case_type <- as.factor(cases_nat$case_type)
 proc <- read.csv('FOIA TRAC Report 20221003/B_TblProceeding.csv', sep = "\t", header = T, skipNul = T)
 colnames(proc) <-tolower(colnames(proc))
 
-proc_columns <- c("idnproceeding","idncase","osc_date","ij_code","hearing_date","dec_code","other_comp","comp_date","crim_ind")
+proc_columns <- c("idnproceeding","idncase","osc_date","ij_code","hearing_date","dec_code","other_comp","comp_date","crim_ind","aggravate_felon")
 proc <- proc[, proc_columns]
 
 proc <- proc[proc$idnproceeding!= "",]
@@ -207,20 +207,72 @@ rep <- rep2[!duplicated(rep2$idncase), ]
 rep$represent <- 1
 rep_merge <- subset(rep, select = c("idncase","represent")) # the only required data? 
 
-#Put the latest proceeding on the top of every case, so that we can keep the latest data of this case when use duplicate to delete the earlier ones
-main <- main %>% 
-  arrange(idncase, desc(hearing_date))
-
 #Delete records with hearing date in the future, since there will be no decision made / decision pending for appeal
 main <- main %>% filter(hearing_date < '2022-11-01')
 
+#merge dec_code with other_comp -- they both record decision codes
 
-#in main, one individual corresponding to more proceedings
+main$dec_code[main$dec_code==" "] <- ""
+main$dec_code[main$dec_code=="  "] <- ""
+main$other_comp[main$other_comp==" "] <- ""
+main$other_comp[main$other_comp=="  "] <- ""
+main$new_dec_code <- paste(main$dec_code, main$other_comp, sep="")
+main$dec_code[main$new_dec_code=="OT"] <- "T"
+
+idncase_vector <- table(main$idncase)
+unique_idncase_vec <- idncase_vector[idncase_vector==1]
+
+unique_id_data <- main[which(main$idncase %in% names(unique_idncase_vec)),] #unique idncase, unique proceeding
+dupMain <- main[-which(main$idncase %in% names(unique_idncase_vec)),] #one idncase, multiple proceedings
+
+dup_decision_id_data <- dupMain %>% 
+  group_by(idncase) %>% 
+  filter(any(new_dec_code %in% c("E","G","J","O","R","T","U","V","W","X","Z",
+                                 "A","C","F","M","O","P","T","Y"))) #with non-empty dec_code
+
+dupMain_empty <- dupMain[-which(dupMain$idncase %in% dup_decision_id_data$idncase),] #4 individuals/8 proceedings with no decision issued here
+#Put the latest proceeding on the top of every case, so that we can keep the latest data of this case when use duplicate to delete the earlier ones
+dup_decision_id_data <- dup_decision_id_data %>% 
+  arrange(idncase, desc(hearing_date))
+
+dupMain <- NULL
+#in duplicated cases, one individual corresponding to more proceedings
 #Delete duplicates in idncase, keep the latest proceeding only
-before_unique_main <- main
-main <- main[!duplicated(main$idncase), ]
+dup_latest_dec <- dup_decision_id_data[!duplicated(dup_decision_id_data$idncase), ]
 
+dupMain_empty <- dupMain_empty %>%  #similarly
+  arrange(idncase, desc(hearing_date))
+dupMain_empty <- dupMain_empty[!duplicated(dupMain_empty$idncase), ]
 
+table(dup_latest_dec$new_dec_code)
+table(unique_id_data$new_dec_code)
+
+#New control variable 12/7/22: how many proceedings does a person go through
+numproc <- data.frame(names(idncase_vector),idncase_vector)
+
+uniq_main <- rbind(dup_latest_dec,unique_id_data)
+uniq_main <- rbind(uniq_main,dupMain_empty)
+uniq_main <- uniq_main %>% arrange(idncase)
+
+numproc <- subset(numproc, select = Freq)
+colnames(numproc) <- c("num_proc")
+main <- cbind(uniq_main,numproc)
+
+table(main$new_dec_code) #1.1M with empty decision codes
+main <- main[, !(colnames(main) %in% c("dec_code", "other_comp"))]
+
+#save disk space
+dup_decision_id_data <- NULL
+dup_latest_dec <- NULL
+dupMain <- NULL
+dupMain_empty <- NULL
+unique_id_data <- NULL
+uniq_main <- NULL
+numproc <- NULL
+nat <- NULL
+nat_dat <- NULL
+
+#merge with representation/attorney data
 main <- merge(main, rep_merge, by = "idncase", all.x = T)
 
 #convert bond amount na to 0
@@ -238,8 +290,6 @@ rep_merge <- NULL
 rep2 <- NULL
 
 
-
-
 #do we need to add dummies just for regression? Or we can use factor?
 #main$i_africa <- ifelse(main$immi_type == "African", 1,0)
 #main$i_carib <- ifelse(main$immi_type == "Caribbean", 1,0)
@@ -248,11 +298,4 @@ rep2 <- NULL
 
 #export
 library(data.table)
-fwrite(main, "regression.csv", row.names=FALSE, col.names=TRUE)
-
-
-
-
-
-
-
+fwrite(main, "regression_1206.csv", row.names=FALSE, col.names=TRUE)
