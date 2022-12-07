@@ -1,6 +1,6 @@
 # Capstone
 
-*This readme file is updated on Dec 6. 
+*This readme file is updated on Dec 7. 
 
 This code uses the EOIR FOIA library to analyze the relationship of an immigrant's detention status and the court decision he/she received in immigration proceedings. 
 
