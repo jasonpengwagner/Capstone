@@ -283,7 +283,7 @@ main$req_bond[is.na(main$req_bond)] <- 0
 table(main$new_dec_code) # *** what does all these decision code mean? Doesn't match with the code book, and many missing values...
 main$remove <- ifelse(main$new_dec_code == "X", 1,0)
 
-main$crim_ind <- ifelse(as.numeric(main$crim_ind)==1,0,1)
+
 
 
 #save disk space
