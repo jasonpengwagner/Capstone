@@ -61,7 +61,7 @@ cases_nat$case_type <- as.factor(cases_nat$case_type)
 proc <- read.csv('FOIA TRAC Report 20221003/B_TblProceeding.csv', sep = "\t", header = T, skipNul = T)
 colnames(proc) <-tolower(colnames(proc))
 
-proc_columns <- c("idnproceeding","idncase","osc_date","ij_code","hearing_date","dec_code","other_comp","comp_date","crim_ind","aggravate_felon")
+proc_columns <- c("idnproceeding","idncase","osc_date","ij_code","hearing_date","dec_code","other_comp","comp_date","crim_ind","aggravate_felon","trans_nbr")
 proc <- proc[, proc_columns]
 
 proc <- proc[proc$idnproceeding!= "",]
@@ -88,25 +88,32 @@ proc <- proc[!duplicated(proc),]
 bond <- read.csv('FOIA TRAC Report 20221003/D_TblAssociatedBond.csv',sep = "\t", header = T, skipNul = T)
 bond <- bond[!duplicated(bond$IDNASSOCBOND),]
 colnames(bond) <- tolower(colnames(bond))
-bond_keep <- c("idncase", "bond_hear_req_date","initial_bond","new_bond")
 
-bond <- subset(bond, select = bond_keep)
 
 #  Mail Question 3: bond hearings only happen when immigrants ask the court to adjust the bond, which may involve judges' decision. 
 #  Would this restrict us from using judge fixed effects? 
 #  Every bond record involves a bond hearing, as the bond_hear_req_date field tells us
 #  How could we exclude those who appeal the bond?
-sum(is.na(bond$bond_hear_req_date))
+
+
+bond_keep <- c("idncase", "bond_hear_req_date","initial_bond","new_bond","base_city_code","ij_code","dec","comp_date","rel_con", "bond_type","filing_method","filing_party")
+
+bond <- subset(bond, select = bond_keep)
 
 bond$bond_hear_req_date <- substr(bond$bond_hear_req_date, 1, 10)
 bond$bond_hear_req_date  <- as.Date(bond$bond_hear_req_date, format = "%Y-%m-%d")
 
-#bond <- bond[!is.na(bond$bond_hear_req_date),] #no need because there is no NAs in this field
+bond$comp_date <- substr(bond$comp_date, 1, 10)
+bond$comp_date  <- as.Date(bond$comp_date, format = "%Y-%m-%d")
 
 bond$initial_bond <- as.numeric(bond$initial_bond)
 bond$new_bond <- as.numeric(bond$new_bond)
 
-bond$initial_bond[is.na(bond$initial_bond)] <- 0 
+#NAs will be created for non-numeric vectors to use as.numeric function, so we need to convert these NAs to 0
+#NAs also mean that there isn't any values in this field before, i.e. as.numeric("") returns NA
+#900k NAs for initial_bond, 587k NAs for new_bond, judge grants more bond than DHS
+
+bond$initial_bond[is.na(bond$initial_bond)] <- 0    # transfer NAs to 0, that is deny/not release bond
 bond$new_bond[is.na(bond$new_bond)] <- 0 
 
 bond$bond_amount <- 0 
@@ -116,12 +123,36 @@ bond$bond_amount[bond$initial_bond!=0 & bond$new_bond==0] <- bond$initial_bond[b
 bond$bond_amount[bond$initial_bond==0 & bond$new_bond==0] <- bond$initial_bond[bond$initial_bond==0 & bond$new_bond==0] #no initial bond or new bond either, i.e., requested bond but did not get one for this proceeding/bond id
 
 # averaging the bond amount for each case-id (immigrant)
-
 bond_case <- summaryBy( cbind(bond_amount,initial_bond) ~ idncase, FUN = c(sum, mean), data = bond)
 bond_case <- bond_case[2:nrow(bond_case),] #drop a blank obs
 
+#change colnames to avoid confusion
+colnames(bond)[5]<-"bond_hearing_city_code"
+colnames(bond)[6]<-"bond_hearing_ij_code"
+colnames(bond)[7]<-"bond_dec_code"
+colnames(bond)[8]<-"bond_dec_date"
+
+
+bond <- bond %>% arrange(idncase,desc(bond_hear_req_date))
+bond_info <- bond[!duplicated(bond$idncase),]
+
+bond_info_keep <- c("bond_hear_req_date","bond_hearing_city_code","bond_hearing_ij_code","bond_dec_code","bond_dec_date","rel_con", "bond_type","filing_method","filing_party")
+bond_info <- subset(bond_info, select = bond_info_keep)
+bond_info <- bond_info[2:nrow(bond_info),] #drop an obs with empty idncase
+
+bond_case <- cbind(bond_case,bond_info)
+bond_case <- bond_case[2:nrow(bond_case),] #drop a obs with idncase "0000"
+
+#optional: calculate number of hearings by sum/mean
+#bond_case$numofhear <- bond_case$bond_amount.sum / bond_case$bond_amount.mean #lots of NaNs created
+#bond_case$numofhear <- ifelse(!is.nan(bond_case$numofhear),bond_case$numofhear,ifelse(is.na(bond_case$bond_dec_date),0,1))
+# may need to table and count frequency again
+
 bond_case$req_bond <- 1  #flag for those requested for bond
 
+#export condensed bond table
+library(data.table)
+fwrite(bond_case, "bond_1209.csv", row.names=FALSE, col.names=TRUE)
 
 countries <- NULL
 cases <- NULL
@@ -166,7 +197,7 @@ main <- merge(case_proc, bond_case, by = "idncase", all.x = T)
 main <- main[!is.na(main$nat),]
 
 
-main$custody[main$custody=="R"] <- "D" #group released as detained since question of interest is whether one was ever detained
+#main$custody[main$custody=="R"] <- "D" #group released as detained since question of interest is whether one was ever detained
 main <- main[main$custody!="",]
 
 
@@ -174,7 +205,7 @@ main <- main[main$custody!="",]
 case_proc <- NULL
 
 bond_case <- NULL
-
+bond_info <- NULL
 
 table(main$case_type)
 #select only the removal case (99.9% of all data), deleted column "case_type"
@@ -275,7 +306,7 @@ main$initial_bond.sum[is.na(main$initial_bond.sum)] <- 0
 main$initial_bond.mean[is.na(main$initial_bond.mean)] <- 0
 
 #convert to binary variables
-main$det <- ifelse(main$custody == "D", 1,0)
+#main$det <- ifelse(main$custody == "D", 1,0)
 main$represent[is.na(main$represent)] <- 0
 main$req_bond[is.na(main$req_bond)] <- 0
 
